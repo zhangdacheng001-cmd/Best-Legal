@@ -1,0 +1,8 @@
+# 可选：自定义脱敏词表
+# 格式一：type,value
+# type 可用 person / organization / custom；未知 type 会按 custom 处理。
+# 格式二：直接写主体名称，默认按 custom 处理。
+#
+# person,张三
+# organization,宁波某某进出口有限公司
+# 浙江某某律师事务所
