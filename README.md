@@ -299,7 +299,148 @@ organization,宁波某某进出口有限公司
 
 因此，建议将脚本输出作为“初步清洗稿”，在正式入库、对外分享或用于模型训练前进行抽样复核。
 
-## 五、运行环境
+## 五、本地文章清洗与脱敏脚本
+
+除 `fada_crawler.py` 外，本仓库还提供独立的 `article_cleaner.py`，用于处理已经从公开渠道下载到本地的文章文件。该脚本不负责抓取网页，只负责对指定文件夹内的文章进行批量清洗、脱敏、YAML 元信息编制和推广文章过滤。
+
+### 1. 适用场景
+
+适用于以下工作流：
+
+1. 已从公开渠道下载文章到本地工作区；
+2. 需要对某个文件夹范围内的文章进行集中批量处理；
+3. 需要将自然人、公司、律所、银行等主体信息替换为占位符；
+4. 需要为每个文档补充 YAML 元信息；
+5. 需要过滤明显推广、广告、活动邀请、祝贺类文章。
+
+默认支持的文件类型：
+
+```text
+.md, .markdown, .txt, .html, .htm
+```
+
+### 2. 基本命令
+
+将指定目录中的文章清洗到一个新的输出目录，原文件不变：
+
+```bash
+python3 article_cleaner.py "/Users/Mr.Z/工作区/待清洗文章"
+```
+
+指定输出目录：
+
+```bash
+python3 article_cleaner.py "/Users/Mr.Z/工作区/待清洗文章" --output-dir "/Users/Mr.Z/工作区/清洗后文章"
+```
+
+只扫描并预览处理结果，不写入、不删除：
+
+```bash
+python3 article_cleaner.py "/Users/Mr.Z/工作区/待清洗文章" --dry-run
+```
+
+直接改写原文件：
+
+```bash
+python3 article_cleaner.py "/Users/Mr.Z/工作区/待清洗文章" --in-place
+```
+
+### 3. 推广文章过滤与删除规则
+
+脚本会读取每篇文章标题。如果标题中出现以下默认关键词，会识别为明显推广或广告文章：
+
+```text
+荣登, 祝贺, 邀请, 恭喜
+```
+
+普通清洗模式下，推广文章不会写入清洗后的输出目录，原文件保持不变。
+
+如需处理源文件，可使用：
+
+```bash
+python3 article_cleaner.py "/Users/Mr.Z/工作区/待清洗文章" --delete-promos
+```
+
+默认不是硬删除，而是移入隔离目录，便于复核和恢复。若确需真正删除，可使用：
+
+```bash
+python3 article_cleaner.py "/Users/Mr.Z/工作区/待清洗文章" --delete-promos --hard-delete
+```
+
+如需自定义推广关键词：
+
+```bash
+python3 article_cleaner.py "/Users/Mr.Z/工作区/待清洗文章" --promo-keywords "荣登,祝贺,邀请,恭喜,喜讯,报名"
+```
+
+### 4. YAML 元信息
+
+每个清洗后的文档都会写入 YAML front matter，示例：
+
+```yaml
+---
+title: "某法律实务文章"
+original_filename: "article.md"
+original_path: "/Users/Mr.Z/工作区/待清洗文章/article.md"
+source_extension: ".md"
+processed_at: "2026-06-28T..."
+format: "markdown"
+cleaned: true
+anonymized: true
+anonymization:
+  method: "rule_based_regex"
+  strict_person_regex: true
+  replacement_counts:
+    person: 2
+    organization: 1
+content_sha256_before: "..."
+content_sha256_after: "..."
+---
+```
+
+### 5. 脱敏规则
+
+`article_cleaner.py` 使用与抓取脚本相近的规则化脱敏逻辑：
+
+- 对自然人姓名、已半匿名姓名进行替换；
+- 对公司、律所、银行、保险公司、证券公司、基金公司、合伙企业等具体主体名称进行替换；
+- 对手机号、身份证号、邮箱、统一社会信用代码进行替换；
+- 对用户自定义词表中的主体名称进行替换；
+- 默认保留“公司”“银行”“保险公司”等泛称，降低误伤。
+
+使用自定义脱敏词表：
+
+```bash
+python3 article_cleaner.py "/Users/Mr.Z/工作区/待清洗文章" --extra-entities extra_entities.example.txt
+```
+
+默认会启用全文人名识别，以尽量覆盖正文中的自然人姓名。若文章类型复杂、担心误伤普通中文词语，可改用保守模式：
+
+```bash
+python3 article_cleaner.py "/Users/Mr.Z/工作区/待清洗文章" --conservative-person-regex
+```
+
+**注意**：全文人名识别可能误伤普通中文词语，建议先用 `--dry-run` 或小范围目录测试；如果误伤较多，再切换为 `--conservative-person-regex`。
+
+### 6. 清洗报告
+
+脚本会生成：
+
+```text
+cleaning_report.json
+cleaning_report.md
+```
+
+报告中会记录每个文件的处理结果，包括：
+
+- 原始文件路径；
+- 输出文件路径；
+- 文章标题；
+- 是否被过滤；
+- 命中的推广关键词；
+- 脱敏替换数量。
+
+## 六、运行环境
 
 依赖：
 
@@ -316,16 +457,17 @@ lxml
 python3 -m pip install lxml
 ```
 
-## 六、文件说明
+## 七、文件说明
 
 ```text
 fada_crawler.py              主脚本
+article_cleaner.py           本地文章批量清洗与脱敏脚本
 urls.txt                     示例 URL 清单
 extra_entities.example.txt   自定义脱敏词表示例
 README.md                    使用说明
 ```
 
-## 七、合规与频率提示
+## 八、合规与频率提示
 
 - 仅采集最高人民法院官网公开页面；
 - 建议保留默认请求间隔或适当调大 `--delay`；
